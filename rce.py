@@ -1,16 +1,3 @@
-#!/usr/bin/env python3
-#
-# CNEXT: PHP file-read to RCE (CVE-2024-2961)
-# Date: 2024-05-27
-# Author: Charles FOL @cfreal_ (LEXFO/AMBIONICS)
-#
-# TODO Parse LIBC to know if patched
-#
-# INFORMATIONS
-#
-# To use, implement the Remote class, which tells the exploit how to send the payload.
-#
-
 from __future__ import annotations
 
 import base64
