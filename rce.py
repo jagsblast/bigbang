@@ -103,9 +103,6 @@ class Exploit:
         self.heap = self.heap and int(self.heap, 16)
 
     def check_vulnerable(self) -> None:
-        """Checks whether the target is reachable and properly allows for the various
-        wrappers and filters that the exploit needs.
-        """
        
         def safe_download(path: str) -> bytes:
             try:
@@ -252,71 +249,6 @@ class Exploit:
         self.exploit()
 
     def build_exploit_path(self) -> str:
-        """On each step of the exploit, a filter will process each chunk one after the
-        other. Processing generally involves making some kind of operation either
-        on the chunk or in a destination chunk of the same size. Each operation is
-        applied on every single chunk; you cannot make PHP apply iconv on the first 10
-        chunks and leave the rest in place. That's where the difficulties come from.
-
-        Keep in mind that we know the address of the main heap, and the libraries.
-        ASLR/PIE do not matter here.
-
-        The idea is to use the bug to make the freelist for chunks of size 0x100 point
-        lower. For instance, we have the following free list:
-
-        ... -> 0x7fffAABBCC900 -> 0x7fffAABBCCA00 -> 0x7fffAABBCCB00
-
-        By triggering the bug from chunk ..900, we get:
-
-        ... -> 0x7fffAABBCCA00 -> 0x7fffAABBCCB48 -> ???
-
-        That's step 3.
-
-        Now, in order to control the free list, and make it point whereever we want,
-        we need to have previously put a pointer at address 0x7fffAABBCCB48. To do so,
-        we'd have to have allocated 0x7fffAABBCCB00 and set our pointer at offset 0x48.
-        That's step 2.
-
-        Now, if we were to perform step2 an then step3 without anything else, we'd have
-        a problem: after step2 has been processed, the free list goes bottom-up, like:
-
-        0x7fffAABBCCB00 -> 0x7fffAABBCCA00 -> 0x7fffAABBCC900
-
-        We need to go the other way around. That's why we have step 1: it just allocates
-        chunks. When they get freed, they reverse the free list. Now step2 allocates in
-        reverse order, and therefore after step2, chunks are in the correct order.
-
-        Another problem comes up.
-
-        To trigger the overflow in step3, we convert from UTF-8 to ISO-2022-CN-EXT.
-        Since step2 creates chunks that contain pointers and pointers are generally not
-        UTF-8, we cannot afford to have that conversion happen on the chunks of step2.
-        To avoid this, we put the chunks in step2 at the very end of the chain, and
-        prefix them with `0\n`. When dechunked (right before the iconv), they will
-        "disappear" from the chain, preserving them from the character set conversion
-        and saving us from an unwanted processing error that would stop the processing
-        chain.
-
-        After step3 we have a corrupted freelist with an arbitrary pointer into it. We
-        don't know the precise layout of the heap, but we know that at the top of the
-        heap resides a zend_mm_heap structure. We overwrite this structure in two ways.
-        Its free_slot[] array contains a pointer to each free list. By overwriting it,
-        we can make PHP allocate chunks whereever we want. In addition, its custom_heap
-        field contains pointers to hook functions for emalloc, efree, and erealloc
-        (similarly to malloc_hook, free_hook, etc. in the libc). We overwrite them and
-        then overwrite the use_custom_heap flag to make PHP use these function pointers
-        instead. We can now do our favorite CTF technique and get a call to
-        system(<chunk>).
-        We make sure that the "system" command kills the current process to avoid other
-        system() calls with random chunk data, leading to undefined behaviour.
-
-        The pad blocks just "pad" our allocations so that even if the heap of the
-        process is in a random state, we still get contiguous, in order chunks for our
-        exploit.
-
-        Therefore, the whole process described here CANNOT crash. Everything falls
-        perfectly in place, and nothing can get in the middle of our allocations.
-        """
 
         LIBC = self.info["libc"]
         ADDR_EMALLOC = LIBC.symbols["__libc_malloc"]
